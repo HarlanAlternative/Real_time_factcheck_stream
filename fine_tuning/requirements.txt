@@ -1,0 +1,9 @@
+accelerate>=0.34.0
+bitsandbytes>=0.43.1
+datasets>=2.20.0
+peft>=0.12.0
+scikit-learn>=1.5.1
+torch>=2.4.0
+transformers>=4.44.2
+trl>=0.10.1
+wandb>=0.17.6

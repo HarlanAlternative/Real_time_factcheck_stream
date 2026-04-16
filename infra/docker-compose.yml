@@ -1,0 +1,168 @@
+name: real-time-factcheck-stream
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.3
+    container_name: factcheck-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.3
+    container_name: factcheck-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+
+  postgres:
+    image: postgres:16
+    container_name: factcheck-postgres
+    environment:
+      POSTGRES_DB: factcheck
+      POSTGRES_USER: factcheck
+      POSTGRES_PASSWORD: factcheck
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U factcheck -d factcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka-init:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.app
+    container_name: factcheck-kafka-init
+    depends_on:
+      - kafka
+    command: ["python", "scripts/setup_kafka_topics.py", "--bootstrap-servers", "kafka:29092"]
+    restart: on-failure
+
+  vllm-server:
+    image: vllm/vllm-openai:latest
+    container_name: factcheck-vllm
+    gpus: all
+    ipc: host
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${MODEL_PATH:-../fine_tuned/mistral-liar-lora}:/models/adapter
+      - ${HF_CACHE:-~/.cache/huggingface}:/root/.cache/huggingface
+    entrypoint:
+      - /bin/bash
+      - -lc
+    command:
+      - >
+        if [ -f /models/adapter/adapter_config.json ]; then
+        echo "Starting vLLM with LoRA adapter";
+        exec vllm serve mistralai/Mistral-7B-v0.1
+        --host 0.0.0.0
+        --port 8000
+        --served-model-name mistral-liar-lora
+        --max-model-len 512
+        --gpu-memory-utilization 0.90
+        --dtype half
+        --enforce-eager
+        --enable-lora
+        --lora-modules factcheck=/models/adapter;
+        else
+        echo "LoRA adapter not found, serving base model only";
+        exec vllm serve mistralai/Mistral-7B-v0.1
+        --host 0.0.0.0
+        --port 8000
+        --served-model-name mistral-liar-lora
+        --max-model-len 512
+        --gpu-memory-utilization 0.90
+        --dtype half
+        --enforce-eager;
+        fi
+
+  consumer-worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.app
+    container_name: factcheck-consumer
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      vllm-server:
+        condition: service_started
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      POSTGRES_URL: postgresql+asyncpg://factcheck:factcheck@postgres:5432/factcheck
+      VLLM_BASE_URL: http://vllm-server:8000/v1
+      VLLM_MODEL: factcheck
+    ports:
+      - "8001:8001"
+    command: ["uvicorn", "consumer.worker:app", "--host", "0.0.0.0", "--port", "8001"]
+
+  claim-generator:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.app
+    container_name: factcheck-generator
+    profiles: ["demo"]
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    command:
+      - python
+      - scripts/generate_claims.py
+      - --bootstrap-servers
+      - kafka:29092
+      - --rate
+      - ${GENERATOR_RATE:-1.0}
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: factcheck-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: factcheck-grafana
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards/factcheck:ro
+
+volumes:
+  postgres_data:
+  grafana_data:

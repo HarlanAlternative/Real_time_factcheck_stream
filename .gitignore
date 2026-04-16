@@ -1,0 +1,16 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+*.pyc
+wandb/
+reports/classification_report.json
+fine_tuned/*
+!fine_tuned/mistral-liar-lora/
+fine_tuned/mistral-liar-lora/*
+!fine_tuned/mistral-liar-lora/.gitkeep
+
+*.txt
+reports/classification_report.json
+

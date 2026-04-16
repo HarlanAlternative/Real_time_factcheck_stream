@@ -1,0 +1,5 @@
+aiokafka>=0.10.0
+datasets>=2.20.0
+kafka-python>=2.0.2
+pydantic>=2.8.2
+pydantic-settings>=2.4.0
