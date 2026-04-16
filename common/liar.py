@@ -51,6 +51,10 @@ class LiarExample:
     claim: str
     label: str
     reasoning: str
+    speaker: str
+    speaker_title: str
+    party_affiliation: str
+    context: str
 
 
 def _cache_archive() -> Path:
@@ -132,7 +136,7 @@ def extract_label(example: dict[str, Any]) -> str:
         raise ValueError(f"Label missing from example keys: {sorted(example.keys())}")
 
     if isinstance(raw_value, int):
-        return INTEGER_LABEL_MAP[raw_value]
+        return normalize_label(INTEGER_LABEL_MAP[raw_value])
     return normalize_label(str(raw_value))
 
 
@@ -143,9 +147,23 @@ def extract_reasoning(example: dict[str, Any]) -> str:
     return "Reasoning unavailable in source dataset; assign the closest truthfulness label."
 
 
+def _extract_str(example: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = example.get(key)
+        if value is not None:
+            cleaned = str(value).strip()
+            if cleaned:
+                return cleaned
+    return "Unknown"
+
+
 def to_liar_example(example: dict[str, Any]) -> LiarExample:
     return LiarExample(
         claim=extract_claim(example),
         label=extract_label(example),
         reasoning=extract_reasoning(example),
+        speaker=_extract_str(example, "speaker"),
+        speaker_title=_extract_str(example, "job_title", "speaker_title"),
+        party_affiliation=_extract_str(example, "party_affiliation"),
+        context=_extract_str(example, "context"),
     )

@@ -122,7 +122,13 @@ def main() -> None:
     labels: list[str] = []
     for row in test_split:
         example = to_liar_example(row)
-        prompts.append(build_inference_prompt(example.claim))
+        prompts.append(build_inference_prompt(
+            example.claim,
+            speaker=example.speaker,
+            speaker_title=example.speaker_title,
+            party_affiliation=example.party_affiliation,
+            context=example.context,
+        ))
         labels.append(example.label)
 
     predictions: list[str] = []

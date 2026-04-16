@@ -8,11 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 FactCheckLabel = Literal[
     "true",
+    "mixed",
     "false",
-    "half-true",
-    "mostly-true",
-    "barely-true",
-    "pants-fire",
 ]
 
 

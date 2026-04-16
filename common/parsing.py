@@ -8,19 +8,23 @@ from common.schemas import FactCheckPrediction
 
 FACTCHECK_LABELS: tuple[str, ...] = (
     "true",
+    "mixed",
     "false",
-    "half-true",
-    "mostly-true",
-    "barely-true",
-    "pants-fire",
 )
 
+# Maps both 6-class LIAR labels and common variants → 3-class labels
 LABEL_ALIASES: dict[str, str] = {
-    "pants on fire": "pants-fire",
-    "pants_fire": "pants-fire",
-    "half true": "half-true",
-    "mostly true": "mostly-true",
-    "barely true": "barely-true",
+    # true tier
+    "mostly-true": "true",
+    "mostly true": "true",
+    # mixed tier
+    "half-true": "mixed",
+    "half true": "mixed",
+    "barely-true": "mixed",
+    "barely true": "mixed",
+    # false tier
+    "pants-fire": "false",
+    "pants on fire": "false",
 }
 
 
@@ -58,7 +62,7 @@ def extract_first_json_object(text: str) -> str:
 
 def _fallback_payload(text: str) -> dict[str, Any]:
     label_match = re.search(
-        r"\b(pants on fire|pants[- ]fire|mostly[- ]true|barely[- ]true|half[- ]true|false|true)\b",
+        r"\b(true|mixed|false|mostly[- ]true|half[- ]true|barely[- ]true|pants[- ]fire|pants on fire)\b",
         text,
         flags=re.IGNORECASE,
     )

@@ -19,12 +19,9 @@ from common.prompts import build_training_text
 LOGGER = logging.getLogger("fine_tuning.train")
 
 CONFIDENCE_PRIORS: dict[str, float] = {
-    "pants-fire": 0.99,
     "false": 0.92,
-    "barely-true": 0.68,
-    "half-true": 0.61,
-    "mostly-true": 0.78,
-    "true": 0.95,
+    "mixed": 0.65,
+    "true": 0.90,
 }
 
 
@@ -60,6 +57,10 @@ def _format_row(example: dict[str, Any]) -> dict[str, str]:
             label=record.label,
             reasoning=record.reasoning,
             confidence=CONFIDENCE_PRIORS[record.label],
+            speaker=record.speaker,
+            speaker_title=record.speaker_title,
+            party_affiliation=record.party_affiliation,
+            context=record.context,
         )
     }
 
