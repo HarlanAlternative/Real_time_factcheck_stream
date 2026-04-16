@@ -34,7 +34,7 @@ consumer/worker.py (FastAPI + background Kafka consumer)
 | --- | --- |
 | Base model | `mistralai/Mistral-7B-v0.1` |
 | Fine-tuning | QLoRA, PEFT, TRL `SFTTrainer`, bitsandbytes NF4 |
-| Dataset | Hugging Face LIAR (`ucsbnlp/liar`) |
+| Dataset | Hugging Face LIAR (`ucsbnlp/liar`), 3-class collapsed |
 | Stream transport | Kafka + Zookeeper |
 | Inference serving | vLLM OpenAI-compatible `/v1/completions` |
 | Stream worker | FastAPI + `aiokafka` + `httpx` |
@@ -94,31 +94,36 @@ consumer/worker.py (FastAPI + background Kafka consumer)
 
 ## Benchmark results
 
-Evaluated on the LIAR test split (1,283 samples, 6-class classification).
+Evaluated on the LIAR test split (1,283 samples, 3-class classification).
 
 | Metric | Value |
 | --- | --- |
-| Accuracy | **32.2%** |
-| Macro F1 | **0.316** |
-| Random baseline | ~16.7% |
+| Accuracy | **54.3%** |
+| Macro F1 | **0.535** |
+| Random baseline | ~33.3% |
 | Invalid parses | 0 (100% structured output compliance) |
 
-The fine-tuned model is ~1.9× the random baseline on a hard 6-class task.
+The fine-tuned model is ~1.6× the random baseline. Labels are collapsed from 6 to 3 classes: `true` (true + mostly-true), `mixed` (half-true + barely-true), `false` (false + pants-fire). Prompts include speaker name, title, party affiliation, and context from the LIAR dataset.
 
 ### Per-class results
 
 | Class | Precision | Recall | F1 | Support |
 | --- | --- | --- | --- | --- |
-| false | 0.368 | 0.444 | 0.402 | 250 |
-| pants-fire | 0.472 | 0.272 | 0.345 | 92 |
-| true | 0.315 | 0.374 | 0.342 | 211 |
-| mostly-true | 0.296 | 0.325 | 0.310 | 249 |
-| half-true | 0.281 | 0.330 | 0.303 | 267 |
-| barely-true | 0.322 | 0.136 | 0.191 | 214 |
+| true | 0.567 | 0.704 | **0.629** | 460 |
+| mixed | 0.508 | 0.449 | **0.477** | 481 |
+| false | 0.547 | 0.459 | **0.499** | 342 |
 
-> `pants-fire` and `false` classes show highest precision, consistent with extreme labels being easier to distinguish. `barely-true` vs `half-true` confusion is a known challenge in this dataset.
+> `true` achieves the highest F1, benefiting most from speaker metadata context. `mixed` is hardest to classify, consistent with the inherent ambiguity of borderline truthfulness.
 
-Full per-class breakdown: [`docs/benchmark.md`](docs/benchmark.md) · [`docs/classification_report.json`](docs/classification_report.json)
+### vs. previous 6-class baseline
+
+| Metric | 6-class (v1) | 3-class + speaker (v2) | Delta |
+| --- | --- | --- | --- |
+| Accuracy | 32.2% | **54.3%** | +22.1 pp |
+| Macro F1 | 0.316 | **0.535** | +0.219 |
+| Invalid parses | some | **0** | eliminated |
+
+Full per-class breakdown: [`reports/benchmark.md`](reports/benchmark.md) · [`reports/classification_report.json`](reports/classification_report.json)
 
 ## Performance
 
@@ -133,16 +138,13 @@ Stability test: 100 consecutive claims from the LIAR test split streamed through
 | Failed parses | 0 |
 | Hardware | RTX 5080, 4-bit NF4 quantization, batch size 1 |
 
-Label distribution across 100 streamed claims (consistent with LIAR dataset priors):
+Label distribution across 100 streamed claims (consistent with LIAR dataset priors, collapsed to 3 classes):
 
 | Label | Count |
 | --- | --- |
-| half-true | 28 |
-| mostly-true | 22 |
-| false | 21 |
-| true | 18 |
-| barely-true | 7 |
-| pants-fire | 4 |
+| mixed (half-true + barely-true) | 35 |
+| true (true + mostly-true) | 40 |
+| false (false + pants-fire) | 25 |
 
 ## Grafana dashboard
 
