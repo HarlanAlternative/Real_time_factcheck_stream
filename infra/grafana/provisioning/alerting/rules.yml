@@ -20,7 +20,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 100 * sum(increase(factcheck_label_distribution_total{label=~"false|pants-fire"}[5m])) / clamp_min(sum(increase(factcheck_label_distribution_total[5m])), 1)
+              expr: 100 * sum(increase(factcheck_label_distribution_total{label="false"}[5m])) / clamp_min(sum(increase(factcheck_label_distribution_total[5m])), 1)
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -58,7 +58,7 @@ groups:
         execErrState: Error
         for: 5m
         annotations:
-          summary: False and pants-fire outputs exceed 60% of the last 5 minutes.
+          summary: False label outputs exceed 60% of the last 5 minutes.
         labels:
           severity: warning
 

@@ -4,7 +4,7 @@ from common.parsing import normalize_label, parse_model_output
 
 
 def test_normalize_label_accepts_human_variant() -> None:
-    assert normalize_label("Pants on Fire") == "pants-fire"
+    assert normalize_label("Pants on Fire") == "false"
 
 
 def test_parse_model_output_extracts_json_from_code_fence() -> None:
@@ -14,7 +14,7 @@ def test_parse_model_output_extracts_json_from_code_fence() -> None:
 
     prediction = parse_model_output(output)
 
-    assert prediction.label == "mostly-true"
+    assert prediction.label == "true"
     assert prediction.confidence == 0.74
 
 
